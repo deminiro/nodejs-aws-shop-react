@@ -1,59 +1,66 @@
 import * as cdk from "aws-cdk-lib";
 import { Construct } from "constructs";
 import * as s3 from "aws-cdk-lib/aws-s3";
-import * as s3deploy from "aws-cdk-lib/aws-s3-deployment";
-import * as cloudfront from "aws-cdk-lib/aws-cloudfront";
-import * as origins from "aws-cdk-lib/aws-cloudfront-origins";
 import * as iam from "aws-cdk-lib/aws-iam";
+import * as cloudfront from "aws-cdk-lib/aws-cloudfront";
+import * as s3deploy from "aws-cdk-lib/aws-s3-deployment";
+import { RemovalPolicy } from "aws-cdk-lib";
 
-export class CdkStack extends cdk.Stack {
+export class DeploymentService extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
-    const uniqueBucketName = `rss-shop`;
+    const cloudfrontOAI = new cloudfront.OriginAccessIdentity(
+      this,
+      "AWS-RSS-OAI"
+    );
 
-    const websiteBucket = new s3.Bucket(this, "UniqueWebsiteBucket", {
-      bucketName: uniqueBucketName,
-      websiteIndexDocument: "index.html",
-      publicReadAccess: true,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    const siteBucket = new s3.Bucket(this, "aws-shop-rss", {
+      bucketName: "aws-shop-rss",
+      publicReadAccess: false,
+      removalPolicy: RemovalPolicy.DESTROY,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       autoDeleteObjects: true,
-      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ACLS,
     });
 
-    new s3deploy.BucketDeployment(this, "WebsiteDeployment", {
-      sources: [s3deploy.Source.asset("../dist")],
-      destinationBucket: websiteBucket,
-    });
+    siteBucket.addToResourcePolicy(
+      new iam.PolicyStatement({
+        actions: ["s3:GetObject"],
+        resources: [siteBucket.arnForObjects("*")],
+        principals: [
+          new iam.CanonicalUserPrincipal(
+            cloudfrontOAI.cloudFrontOriginAccessIdentityS3CanonicalUserId
+          ),
+        ],
+      })
+    );
 
     const distribution = new cloudfront.CloudFrontWebDistribution(
       this,
-      "MyDistribution",
+      "aws-shop-rss-Distribution",
       {
         originConfigs: [
           {
             s3OriginSource: {
-              s3BucketSource: websiteBucket,
+              s3BucketSource: siteBucket,
+              originAccessIdentity: cloudfrontOAI,
             },
-            behaviors: [{ isDefaultBehavior: true }],
+            behaviors: [
+              {
+                isDefaultBehavior: true,
+              },
+            ],
           },
         ],
       }
     );
 
-    // Block direct access to the S3 website endpoint
-    websiteBucket.addToResourcePolicy(
-      new iam.PolicyStatement({
-        effect: iam.Effect.DENY,
-        principals: [new iam.AnyPrincipal()],
-        actions: ["s3:GetObject"],
-        resources: [websiteBucket.arnForObjects("*")],
-        conditions: {
-          StringNotLike: {
-            "aws:Referer": ["*cloudfront*"],
-          },
-        },
-      })
-    );
+    // Deploy assets to S3 bucket
+    new s3deploy.BucketDeployment(this, "aws-shop-rss-Deployment", {
+      sources: [s3deploy.Source.asset("../dist")],
+      destinationBucket: siteBucket,
+      distribution,
+      distributionPaths: ["/*"],
+    });
   }
 }
