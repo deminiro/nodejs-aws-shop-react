@@ -11,10 +11,10 @@ import { useAvailableProducts } from "~/queries/products";
 export default function Products() {
   const { data = [], isLoading } = useAvailableProducts();
 
-  if (isLoading) {
+  if (!data || isLoading) {
     return <Typography>Loading...</Typography>;
   }
-
+  console.log(data);
   return (
     <Grid container spacing={4}>
       {/* eslint-disable-next-line @typescript-eslint/no-unused-vars */}

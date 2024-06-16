@@ -4,6 +4,8 @@ import * as s3 from "aws-cdk-lib/aws-s3";
 import * as iam from "aws-cdk-lib/aws-iam";
 import * as cloudfront from "aws-cdk-lib/aws-cloudfront";
 import * as s3deploy from "aws-cdk-lib/aws-s3-deployment";
+import * as lambda from "aws-cdk-lib/aws-lambda";
+import * as apigateway from "aws-cdk-lib/aws-apigateway";
 import { RemovalPolicy } from "aws-cdk-lib";
 
 export class DeploymentService extends cdk.Stack {
@@ -50,6 +52,86 @@ export class DeploymentService extends cdk.Stack {
                 isDefaultBehavior: true,
               },
             ],
+          },
+        ],
+      }
+    );
+
+    const getProductsListFunction = new lambda.Function(
+      this,
+      "getProductsListFunction",
+      {
+        runtime: lambda.Runtime.NODEJS_18_X,
+        handler: "getProductsList.handler",
+        code: lambda.Code.fromAsset("lambda"),
+      }
+    );
+    const getProductsByIdFunction = new lambda.Function(
+      this,
+      "getProductsByIdFunction",
+      {
+        runtime: lambda.Runtime.NODEJS_18_X,
+        handler: "getProductsById.handler",
+        code: lambda.Code.fromAsset("lambda"),
+      }
+    );
+
+    // API Gateway for getProductsList
+    const api = new apigateway.RestApi(this, "ProductServiceApi", {
+      restApiName: "Product Service",
+      defaultCorsPreflightOptions: {
+        allowOrigins: apigateway.Cors.ALL_ORIGINS,
+        allowMethods: apigateway.Cors.ALL_METHODS,
+      },
+    });
+
+    const products = api.root.addResource("products");
+    products.addMethod(
+      "GET",
+      new apigateway.LambdaIntegration(getProductsListFunction, {
+        proxy: false,
+        integrationResponses: [
+          {
+            statusCode: "200",
+            responseParameters: {
+              "method.response.header.Access-Control-Allow-Origin": "'*'",
+            },
+          },
+        ],
+      }),
+      {
+        methodResponses: [
+          {
+            statusCode: "200",
+            responseParameters: {
+              "method.response.header.Access-Control-Allow-Origin": true,
+            },
+          },
+        ],
+      }
+    );
+
+    const product = products.addResource("{productId}");
+    product.addMethod(
+      "GET",
+      new apigateway.LambdaIntegration(getProductsByIdFunction, {
+        proxy: true,
+        integrationResponses: [
+          {
+            statusCode: "200",
+            responseParameters: {
+              "method.response.header.Access-Control-Allow-Origin": "'*'",
+            },
+          },
+        ],
+      }),
+      {
+        methodResponses: [
+          {
+            statusCode: "200",
+            responseParameters: {
+              "method.response.header.Access-Control-Allow-Origin": true,
+            },
           },
         ],
       }
