@@ -4,4 +4,4 @@
 
 # Cloudfront URL
 
-- https://d25vwkm15sy5ki.cloudfront.net/
+- https://dhf14n2emdmww.cloudfront.net
