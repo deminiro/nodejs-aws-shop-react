@@ -4,4 +4,4 @@
 
 # Cloudfront URL
 
-- https://dhf14n2emdmww.cloudfront.net
+- https://dhf14n2emdmww.cloudfront.net/
